@@ -1,0 +1,11 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "CodeLens (Launch) - LibraryTest",
+            "request": "launch",
+            "mainClass": "LibraryTest",
+            "projectName": "NTProperties"
+        }
+    ]
+}
