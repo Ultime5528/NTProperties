@@ -3,6 +3,9 @@
  */
 import org.junit.Test;
 
+import edu.wpi.first.networktables.EntryListenerFlags;
+import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 
 import static org.junit.Assert.*;
@@ -19,7 +22,7 @@ public class LibraryTest {
         NetworkTableInstance ntInst = NetworkTableInstance.getDefault();
         ntInst.startClient("127.0.0.1");
 
-        NTProperties properties = new NTProperties(K.class);
+        NTProperties properties = new NTProperties(K.class, false);
         
         while(true) {
 

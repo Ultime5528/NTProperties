@@ -6,8 +6,10 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
@@ -17,9 +19,11 @@ import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 
+/**
+ * Adds the public static fields of a class in a dedicated NetworkTable.
+ */
 public class NTProperties {
 
-    public final static String TABLE_NAME = "NTProperties";
     private static final Set<Class<?>> SUPPORTED_TYPES;
 
     static {
@@ -32,36 +36,43 @@ public class NTProperties {
 
     private NetworkTableInstance ntInst;
 
-    private Queue<Change> changes;
+    private Map<Entry, Change> changes;
     private Object lock;
 
     private ArrayList<Entry> entries;
 
-    public NTProperties(Class<?> propertyClass) {
+    private boolean usePersistentValues;
 
-        changes = new LinkedList<>();
+    public NTProperties(Class<?> propertyClass, boolean usePersistentValues) {
+
+        this.usePersistentValues = usePersistentValues;
+
+        changes = new HashMap<>();
         lock = new Object();
 
         entries = new ArrayList<>();
 
         ntInst = NetworkTableInstance.getDefault();
 
-        addTable(propertyClass, ntInst.getTable(TABLE_NAME));
+        addTable(propertyClass, ntInst.getTable(propertyClass.getSimpleName()));
+
+        ntInst.flush();
 
     }
 
     /**
      * Updates the Properties Class synchronously on the main robot thread.
-     * This should be called periodically, for example, in <code>Robot.periodic()</code>.
+     * This method should be called periodically, for example, in <code>Robot.periodic()</code>.
      */
     public void performChanges() {
 
         synchronized(lock) {
 
-            while(!changes.isEmpty()) {
-                Change change = changes.remove();
+            for(Change change : changes.values()) {
                 change.entry.performChange(change.notif);
             }
+
+            changes.clear();
 
         }
 
@@ -70,6 +81,14 @@ public class NTProperties {
     // Recursive
     private void addTable(Class<?> root, NetworkTable table) {
         
+        // Use the Preferences widget if displayed by the Shuffleboard
+        NetworkTableEntry typeEntry = table.getEntry(".type");
+        typeEntry.setString("RobotPreferences");
+        
+        if(usePersistentValues)
+            typeEntry.setPersistent();
+        
+        // Adds all fields of the class to the table
         addFields(root, table);
 
         Class<?>[] innerClasses = root.getClasses();
@@ -119,11 +138,29 @@ public class NTProperties {
         public Entry(Field field, NetworkTable table) {
 
             this.field = field;
-            entry = table.getEntry(field.getName());
             type = field.getType();
             declaringClass = field.getDeclaringClass();
             
+            boolean doesNotExist = !table.containsKey(field.getName());
+            entry = table.getEntry(field.getName());
+            
             setupCallbackIfPresent();
+
+            int listenerFlags = EntryListenerFlags.kUpdate;
+
+            if(!usePersistentValues || doesNotExist)
+                setInitialValue();
+            else // If an Entry already exists, this makes sure that the listener is triggered and updates the field.
+                listenerFlags |= EntryListenerFlags.kImmediate | EntryListenerFlags.kNew;
+
+            if(usePersistentValues)
+                entry.setPersistent();
+
+            entry.addListener(this::handleNotification, listenerFlags);
+
+        }
+
+        private void setInitialValue() {
 
             try {
 
@@ -147,8 +184,6 @@ public class NTProperties {
 
                 throw new NTPropertiesException(message, e);
             }
-
-            entry.addListener(this::handleNotification, EntryListenerFlags.kUpdate);
 
         }
 
@@ -201,7 +236,7 @@ public class NTProperties {
         private void handleNotification(EntryNotification notif) {
 
             synchronized (lock) {
-                changes.add(new Change(this, notif));
+                changes.put(this, new Change(this, notif));
             }
 
         }
