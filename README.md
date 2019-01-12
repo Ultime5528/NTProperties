@@ -9,7 +9,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.ultime5528:ntproperties:0.1'
+    implementation 'com.github.ultime5528:ntproperties:v0.1.0'
 }
 ```
 
